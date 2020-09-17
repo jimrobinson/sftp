@@ -17,6 +17,10 @@ import (
 	"time"
 )
 
+var ErrFlagNoRead = fmt.Errorf("file was not opened with flag Read")
+var ErrFlagNoWrite = fmt.Errorf("file was not opened with flag Write")
+var ErrFlagExcl = fmt.Errorf("file was opened with flag Excel")
+
 // InMemHandler returns a Hanlders object with the test handlers.
 func InMemHandler() Handlers {
 	root := &root{
@@ -31,12 +35,22 @@ func (fs *root) Fileread(r *Request) (io.ReaderAt, error) {
 	if fs.mockErr != nil {
 		return nil, fs.mockErr
 	}
+
+	flag_read := r.Flags&sshFxfRead != 0
+
 	_ = r.WithContext(r.Context()) // initialize context for deadlock testing
 	fs.filesLock.Lock()
 	defer fs.filesLock.Unlock()
 	file, err := fs.fetch(r.Filepath)
 	if err != nil {
 		return nil, err
+	}
+	if !flag_read {
+		return nil, &os.PathError{
+			Op:   "read",
+			Path: file.name,
+			Err:  ErrFlagNoRead,
+		}
 	}
 	if file.symlink != "" {
 		file, err = fs.fetch(file.symlink)
@@ -51,6 +65,12 @@ func (fs *root) getFileForWrite(r *Request) (*memFile, error) {
 	if fs.mockErr != nil {
 		return nil, fs.mockErr
 	}
+
+	flag_create := r.Flags&sshFxfCreat != 0
+	flag_excl := r.Flags&sshFxfExcl != 0
+	flag_trunc := r.Flags&sshFxfTrunc != 0
+	flag_write := r.Flags&sshFxfWrite != 0
+
 	_ = r.WithContext(r.Context()) // initialize context for deadlock testing
 	fs.filesLock.Lock()
 	defer fs.filesLock.Unlock()
@@ -65,6 +85,24 @@ func (fs *root) getFileForWrite(r *Request) (*memFile, error) {
 		}
 		file = newMemFile(r.Filepath, false)
 		fs.files[r.Filepath] = file
+	} else {
+		if !flag_write {
+			return nil, &os.PathError{
+				Op:   "write",
+				Path: file.name,
+				Err:  ErrFlagNoWrite,
+			}
+		}
+		if flag_create && flag_excl {
+			return nil, &os.PathError{
+				Op:   "write",
+				Path: file.name,
+				Err:  ErrFlagExcl,
+			}
+		}
+	}
+	if flag_create || flag_trunc {
+		file.Truncate(0)
 	}
 	return file, nil
 }
