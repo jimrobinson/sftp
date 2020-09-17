@@ -36,7 +36,7 @@ func (fs *root) Fileread(r *Request) (io.ReaderAt, error) {
 		return nil, fs.mockErr
 	}
 
-	flag_read := r.Flags&sshFxfRead != 0
+	pflags := r.Pflags()
 
 	_ = r.WithContext(r.Context()) // initialize context for deadlock testing
 	fs.filesLock.Lock()
@@ -45,7 +45,7 @@ func (fs *root) Fileread(r *Request) (io.ReaderAt, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !flag_read {
+	if !pflags.Read {
 		return nil, &os.PathError{
 			Op:   "read",
 			Path: file.name,
@@ -66,10 +66,7 @@ func (fs *root) getFileForWrite(r *Request) (*memFile, error) {
 		return nil, fs.mockErr
 	}
 
-	flag_create := r.Flags&sshFxfCreat != 0
-	flag_excl := r.Flags&sshFxfExcl != 0
-	flag_trunc := r.Flags&sshFxfTrunc != 0
-	flag_write := r.Flags&sshFxfWrite != 0
+	pflags := r.Pflags()
 
 	_ = r.WithContext(r.Context()) // initialize context for deadlock testing
 	fs.filesLock.Lock()
@@ -86,23 +83,23 @@ func (fs *root) getFileForWrite(r *Request) (*memFile, error) {
 		file = newMemFile(r.Filepath, false)
 		fs.files[r.Filepath] = file
 	} else {
-		if flag_create && flag_excl {
+		if pflags.Creat && pflags.Excl {
 			return nil, &os.PathError{
 				Op:   "write",
 				Path: file.name,
 				Err:  ErrFlagExcl,
 			}
 		}
-		if !flag_write {
+		if !pflags.Write {
 			return nil, &os.PathError{
 				Op:   "write",
 				Path: file.name,
 				Err:  ErrFlagNoWrite,
 			}
 		}
-	}
-	if flag_create && flag_trunc {
-		file.Truncate(0)
+		if pflags.Creat && pflags.Trunc {
+			file.Truncate(0)
+		}
 	}
 	return file, nil
 }
