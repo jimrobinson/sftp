@@ -101,7 +101,7 @@ func (fs *root) getFileForWrite(r *Request) (*memFile, error) {
 			}
 		}
 	}
-	if flag_create || flag_trunc {
+	if flag_create && flag_trunc {
 		file.Truncate(0)
 	}
 	return file, nil
