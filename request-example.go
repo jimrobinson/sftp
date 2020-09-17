@@ -19,7 +19,7 @@ import (
 
 var ErrFlagNoRead = fmt.Errorf("file was not opened with flag Read")
 var ErrFlagNoWrite = fmt.Errorf("file was not opened with flag Write")
-var ErrFlagExcl = fmt.Errorf("file was opened with flag Excel")
+var ErrFlagExcl = fmt.Errorf("file already exists")
 
 // InMemHandler returns a Hanlders object with the test handlers.
 func InMemHandler() Handlers {
@@ -86,18 +86,18 @@ func (fs *root) getFileForWrite(r *Request) (*memFile, error) {
 		file = newMemFile(r.Filepath, false)
 		fs.files[r.Filepath] = file
 	} else {
-		if !flag_write {
-			return nil, &os.PathError{
-				Op:   "write",
-				Path: file.name,
-				Err:  ErrFlagNoWrite,
-			}
-		}
 		if flag_create && flag_excl {
 			return nil, &os.PathError{
 				Op:   "write",
 				Path: file.name,
 				Err:  ErrFlagExcl,
+			}
+		}
+		if !flag_write {
+			return nil, &os.PathError{
+				Op:   "write",
+				Path: file.name,
+				Err:  ErrFlagNoWrite,
 			}
 		}
 	}
